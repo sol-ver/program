@@ -1,0 +1,11 @@
+[workspace]
+resolver = "2"
+members = [
+  "program",
+]
+
+[workspace.package]
+authors = ["imduchuyyy <imduchuyyy@gmail.com>"]
+repository = "https://github.com/imduchuyyy/intent-solana"
+license = "Apache-2.0"
+edition = "2021"
