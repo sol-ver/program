@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  push:
+    branches: ["main", "master"]
+  pull_request:
+    branches: ["main", "master"]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build_and_test:
+    name: Build and Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Solana
+        if: ${{ inputs.solana == 'true' }}
+        uses: solana-program/actions/install-solana@v1
+        with:
+          version: ${{ env.SOLANA_VERSION }}
+          cache: true
+
+      - name: Cache Cargo registry and build artifacts
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Build Program
+        run: |
+          cd program
+          cargo build-sbf
+
+      - name: Run Tests
+        run: |
+          cd program
+          cargo test
+
+      - name: Run Clippy
+        run: |
+          cd program
+          cargo clippy -- -D warnings
