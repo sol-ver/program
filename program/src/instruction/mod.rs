@@ -1,9 +1,6 @@
-use bytemuck::Pod;
 use pinocchio::program_error::ProgramError;
 
 pub mod initialize_order;
-
-
 
 #[repr(u8)]
 pub enum Instruction {
@@ -17,7 +14,9 @@ impl TryFrom<u8> for Instruction {
 
     fn try_from(value: u8) -> Result<Self, Self::Error> {
         match value {
-            0..=2 => Ok(unsafe { core::mem::transmute::<u8, Instruction>(value) }),
+            0 => Ok(Instruction::InitializeOrder),
+            1 => Ok(Instruction::CancelOrder),
+            2 => Ok(Instruction::ExecuteOrder),
             _ => Err(ProgramError::InvalidInstructionData),
         }
     }

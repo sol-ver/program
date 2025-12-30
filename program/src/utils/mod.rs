@@ -1,6 +1,6 @@
-use pinocchio::{account_info::AccountInfo, program_error::ProgramError};
-use bytemuck::{Pod, try_from_bytes};
 use crate::error::SolverError;
+use bytemuck::{try_from_bytes, Pod};
+use pinocchio::{account_info::AccountInfo, program_error::ProgramError};
 
 pub trait DataLen {
     const LEN: usize;
@@ -12,9 +12,10 @@ impl<T: Pod> DataLen for T {
 
 pub trait Unpackable: Pod {
     fn unpack(data: &[u8]) -> Result<Self, ProgramError> {
-        try_from_bytes::<Self>(data)
-            .map(|&item| item)
-            .map_err(|_| ProgramError::InvalidInstructionData)
+        if data.len() != Self::LEN {
+            return Err(ProgramError::InvalidInstructionData);
+        }
+        Ok(bytemuck::try_pod_read_unaligned(data).unwrap())
     }
 }
 

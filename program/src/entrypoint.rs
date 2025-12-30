@@ -1,4 +1,7 @@
-use crate::{error::SolverError, instruction::initialize_order::process_initialize_order};
+use crate::{
+    error::SolverError,
+    instruction::{initialize_order::process_initialize_order, Instruction},
+};
 use pinocchio::{account_info::AccountInfo, entrypoint, msg, pubkey::Pubkey, ProgramResult};
 
 entrypoint!(process_instruction);
@@ -14,13 +17,9 @@ pub fn process_instruction(
         return Err(SolverError::InvalidInstruction.into());
     };
 
-    match *descriminator {
-        0 => {
-            msg!("Processing InitializeOrder instruction");
-            process_initialize_order(accounts, instruction_data)
-        }
-        _ => {
-            return Err(SolverError::InvalidInstruction.into());
-        }
+    let instruction = Instruction::try_from(*descriminator)?;
+    match instruction {
+        Instruction::InitializeOrder => process_initialize_order(accounts, instruction_data),
+        _ => Err(SolverError::InvalidInstruction.into()),
     }
 }

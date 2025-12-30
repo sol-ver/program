@@ -6,6 +6,7 @@ use crate::utils::{try_from_account_info, try_from_account_info_mut, DataLen, In
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[repr(C)]
 pub struct Order {
+    pub is_initialized: bool,
     pub owner: Pubkey,
     pub sell_token: Pubkey,
     pub buy_token: Pubkey,
@@ -13,16 +14,13 @@ pub struct Order {
     pub buy_amount: u64,
     pub referral_fee: u64,
     pub referral_account: Pubkey,
-
     pub rent_payer: Pubkey,
-    pub is_initialized: u8,
-    pub _padding: [u8; 7],
 }
 
 impl Initialized for Order {
     #[inline(always)]
     fn is_initialized(&self) -> bool {
-        self.is_initialized > 0
+        self.is_initialized
     }
 }
 
@@ -43,7 +41,7 @@ impl Order {
         referral_account: Pubkey,
         rent_payer: Pubkey,
     ) -> Result<(), ProgramError> {
-        self.is_initialized = 1;
+        self.is_initialized = true;
         self.owner = owner;
         self.sell_token = sell_token;
         self.buy_token = buy_token;
