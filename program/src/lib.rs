@@ -1,8 +1,8 @@
 #![no_std]
 
 mod entrypoint;
-mod instruction;
 mod error;
+mod instruction;
 mod state;
 mod utils;
 

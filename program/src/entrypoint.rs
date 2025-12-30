@@ -1,13 +1,11 @@
-use pinocchio::{
-    account_info::AccountInfo, entrypoint, msg, pubkey::Pubkey, ProgramResult,
-};
 use crate::{error::SolverError, instruction::initialize_order::process_initialize_order};
+use pinocchio::{account_info::AccountInfo, entrypoint, msg, pubkey::Pubkey, ProgramResult};
 
 entrypoint!(process_instruction);
 
 #[inline(always)]
 pub fn process_instruction(
-    program_id: &Pubkey,
+    _: &Pubkey,
     accounts: &[AccountInfo],
     instruction_data: &[u8],
 ) -> ProgramResult {
@@ -19,7 +17,7 @@ pub fn process_instruction(
     match *descriminator {
         0 => {
             msg!("Processing InitializeOrder instruction");
-            process_initialize_order(program_id, accounts, instruction_data)
+            process_initialize_order(accounts, instruction_data)
         }
         _ => {
             return Err(SolverError::InvalidInstruction.into());

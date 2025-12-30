@@ -1,9 +1,9 @@
-use pinocchio::{account_info::AccountInfo, program_error::ProgramError};
 use pinocchio::pubkey::Pubkey;
+use pinocchio::{account_info::AccountInfo, program_error::ProgramError};
 
-use crate::utils::{try_from_account_info_mut, Initialized};
+use crate::utils::{try_from_account_info, try_from_account_info_mut, DataLen, Initialized};
 
-#[derive(Clone, Copy, Debug, PartialEq, bytemuck::Pod, bytemuck::Zeroable)] 
+#[derive(Clone, Copy, Debug, PartialEq)]
 #[repr(C)]
 pub struct Order {
     pub owner: Pubkey,
@@ -26,10 +26,14 @@ impl Initialized for Order {
     }
 }
 
+impl DataLen for Order {
+    const LEN: usize = core::mem::size_of::<Order>();
+}
+
 impl Order {
     #[inline(always)]
     pub fn init(
-        state_account: &AccountInfo,
+        &mut self,
         owner: Pubkey,
         sell_token: Pubkey,
         buy_token: Pubkey,
@@ -39,16 +43,30 @@ impl Order {
         referral_account: Pubkey,
         rent_payer: Pubkey,
     ) -> Result<(), ProgramError> {
-        let state = unsafe { try_from_account_info_mut::<Order>(state_account) }?;
-        state.is_initialized = 1;
-        state.owner = owner;
-        state.sell_token = sell_token;
-        state.buy_token = buy_token;
-        state.sell_amount = sell_amount;
-        state.buy_amount = buy_amount;
-        state.referral_fee = referral_fee;
-        state.referral_account = referral_account;
-        state.rent_payer = rent_payer;
+        self.is_initialized = 1;
+        self.owner = owner;
+        self.sell_token = sell_token;
+        self.buy_token = buy_token;
+        self.sell_amount = sell_amount;
+        self.buy_amount = buy_amount;
+        self.referral_fee = referral_fee;
+        self.referral_account = referral_account;
+        self.rent_payer = rent_payer;
         Ok(())
+    }
+
+    /// Reads the data from the account.
+    /// This returns a reference to the data, so it does not allocate new memory (Zero Copy).
+    #[inline(always)]
+    pub fn load(account: &AccountInfo) -> Result<&Self, ProgramError> {
+        unsafe { try_from_account_info::<Order>(account) }
+    }
+
+    /// Writes/Modifies the data in the account.
+    /// This returns a mutable reference to the data. Any changes made to the returned struct
+    /// are directly applied to the account's data buffer (Zero Copy).
+    #[inline(always)]
+    pub fn load_mut(account: &AccountInfo) -> Result<&mut Self, ProgramError> {
+        unsafe { try_from_account_info_mut::<Order>(account) }
     }
 }
