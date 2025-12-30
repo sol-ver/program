@@ -39,15 +39,12 @@ jobs:
 
       - name: Build Program
         run: |
-          cd program
           cargo build-sbf
 
       - name: Run Tests
         run: |
-          cd program
           cargo test
 
       - name: Run Clippy
         run: |
-          cd program
           cargo clippy -- -D warnings
