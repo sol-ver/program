@@ -1,4 +1,9 @@
 #![no_std]
 
 mod entrypoint;
-mod processor;
+mod instruction;
+mod error;
+mod state;
+mod utils;
+
+pinocchio_pubkey::declare_id!("7QP9vxNo7EEwTjrskup6n3F1dcwgUsVKgMFnJsXoyBde");

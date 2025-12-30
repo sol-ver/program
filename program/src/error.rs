@@ -5,6 +5,8 @@ use pinocchio::program_error::{ProgramError, ToStr};
 pub enum SolverError {
     /// Invalid Instruction
     InvalidInstruction,
+    InvalidInstructionData,
+    OrderAccountMustBeMut,
 }
 
 impl From<SolverError> for ProgramError {
@@ -13,7 +15,6 @@ impl From<SolverError> for ProgramError {
     }
 }
 
-
 impl ToStr for SolverError {
     fn to_str<E>(&self) -> &'static str
     where
@@ -21,6 +22,8 @@ impl ToStr for SolverError {
     {
         match self {
             SolverError::InvalidInstruction => "Invalid instruction",
+            SolverError::InvalidInstructionData => "Invalid instruction data",
+            SolverError::OrderAccountMustBeMut => "Order account must be mutable",
         }
     }
 }
@@ -31,6 +34,12 @@ impl TryFrom<u32> for SolverError {
     fn try_from(value: u32) -> Result<Self, Self::Error> {
         match value {
             x if x == SolverError::InvalidInstruction as u32 => Ok(SolverError::InvalidInstruction),
+            x if x == SolverError::InvalidInstructionData as u32 => {
+                Ok(SolverError::InvalidInstructionData)
+            }
+            x if x == SolverError::OrderAccountMustBeMut as u32 => {
+                Ok(SolverError::OrderAccountMustBeMut)
+            }
             _ => Err(ProgramError::Custom(value)),
         }
     }

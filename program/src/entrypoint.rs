@@ -1,10 +1,9 @@
-use pinocchio::{ProgramResult, account_info::AccountInfo, entrypoint, msg, no_allocator, nostd_panic_handler, pubkey::Pubkey, program_error::ProgramError};
-use sol_ver_interface::error::SolverError;
-
-use crate::processor::initialize_order::process_initialize_order;
+use pinocchio::{
+    account_info::AccountInfo, entrypoint, msg, pubkey::Pubkey, ProgramResult,
+};
+use crate::{error::SolverError, instruction::initialize_order::process_initialize_order};
 
 entrypoint!(process_instruction);
-nostd_panic_handler!();
 
 #[inline(always)]
 pub fn process_instruction(
