@@ -20,12 +20,10 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Install Solana
-        if: ${{ inputs.solana == 'true' }}
-        uses: solana-program/actions/install-solana@v1
+      - name: Install Solana Toolchain
+        uses: dta7/setup-solana@v1
         with:
-          version: ${{ env.SOLANA_VERSION }}
-          cache: true
+          solana-version: v1.18.23
 
       - name: Cache Cargo registry and build artifacts
         uses: actions/cache@v3
