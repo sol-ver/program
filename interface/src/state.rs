@@ -9,7 +9,8 @@ pub struct Order {
     pub buy_token: Pubkey,
     pub sell_amount: u64,
     pub buy_amount: u64,
-    pub fee_amount: u64,
+    pub referral_fee: u64,
+    pub referral_account: Pubkey,
 
     pub rent_payer: Pubkey
 }

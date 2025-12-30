@@ -4326,6 +4326,7 @@ name = "sol-ver"
 version = "0.1.0"
 dependencies = [
  "pinocchio",
+ "sol-ver-interface",
  "solana-program-test",
 ]
 
