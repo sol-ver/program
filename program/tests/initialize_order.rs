@@ -1,137 +1,355 @@
 use bytemuck::{Pod, Zeroable};
-use solana_program_test::{tokio, ProgramTest};
-use solana_sdk::{
+use solana_program::{
     instruction::{AccountMeta, Instruction},
     pubkey::Pubkey,
+};
+use solana_program_test::{tokio, ProgramTest};
+use solana_sdk::{
     signature::{Keypair, Signer},
     transaction::Transaction,
 };
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+// Constants
+const SPL_TOKEN_PROGRAM_ID: Pubkey =
+    solana_program::pubkey!("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
+const ORDER_PROGRAM_ID: Pubkey =
+    solana_program::pubkey!("7QP9vxNo7EEwTjrskup6n3F1dcwgUsVKgMFnJsXoyBde");
+const SYSTEM_PROGRAM_ID: Pubkey = solana_program::pubkey!("11111111111111111111111111111111");
+const TOKEN_ACCOUNT_LEN: u64 = 165;
+const MINT_LEN: u64 = 82;
+
+// System Instruction Helpers
+fn system_create_account(
+    from_pubkey: &Pubkey,
+    to_pubkey: &Pubkey,
+    lamports: u64,
+    space: u64,
+    owner_program_id: &Pubkey,
+) -> Instruction {
+    let mut data = Vec::with_capacity(4 + 8 + 8 + 32);
+    data.extend_from_slice(&0u32.to_le_bytes()); // CreateAccount
+    data.extend_from_slice(&lamports.to_le_bytes());
+    data.extend_from_slice(&space.to_le_bytes());
+    data.extend_from_slice(owner_program_id.as_ref());
+
+    Instruction {
+        program_id: SYSTEM_PROGRAM_ID,
+        accounts: vec![
+            AccountMeta::new(*from_pubkey, true),
+            AccountMeta::new(*to_pubkey, true),
+        ],
+        data,
+    }
+}
+
+// SPL Token Instructions Builders
+fn token_initialize_mint(
+    mint_pubkey: &Pubkey,
+    mint_authority: &Pubkey,
+    decimals: u8,
+) -> Instruction {
+    let mut data = Vec::with_capacity(67);
+    data.push(0); // InitializeMint discriminator
+    data.push(decimals);
+    data.extend_from_slice(mint_authority.as_ref());
+    data.push(0); // Freeze authority option (None)
+    data.extend_from_slice(&[0u8; 32]);
+
+    Instruction {
+        program_id: SPL_TOKEN_PROGRAM_ID,
+        accounts: vec![
+            AccountMeta::new(*mint_pubkey, false),
+            AccountMeta::new_readonly(solana_program::sysvar::rent::id(), false),
+        ],
+        data,
+    }
+}
+
+fn token_initialize_account(account: &Pubkey, mint: &Pubkey, owner: &Pubkey) -> Instruction {
+    Instruction {
+        program_id: SPL_TOKEN_PROGRAM_ID,
+        accounts: vec![
+            AccountMeta::new(*account, false),
+            AccountMeta::new_readonly(*mint, false),
+            AccountMeta::new_readonly(*owner, false),
+            AccountMeta::new_readonly(solana_program::sysvar::rent::id(), false),
+        ],
+        data: vec![1], // InitializeAccount discriminator
+    }
+}
+
+fn token_mint_to(mint: &Pubkey, dest: &Pubkey, authority: &Pubkey, amount: u64) -> Instruction {
+    let mut data = Vec::with_capacity(9);
+    data.push(7); // MintTo discriminator
+    data.extend_from_slice(&amount.to_le_bytes());
+
+    Instruction {
+        program_id: SPL_TOKEN_PROGRAM_ID,
+        accounts: vec![
+            AccountMeta::new(*mint, false),
+            AccountMeta::new(*dest, false),
+            AccountMeta::new_readonly(*authority, true),
+        ],
+        data,
+    }
+}
+
+// Order Layout
 #[repr(C)]
+#[derive(Clone, Copy, Debug, Pod, Zeroable)]
+struct OrderLayout {
+    is_initialized: u8,
+    owner: [u8; 32],
+    sell_token: [u8; 32],
+    buy_token: [u8; 32],
+    _padding: [u8; 7],
+    sell_amount: u64,
+    buy_amount: u64,
+    referral_fee: u64,
+    referral_token_account: [u8; 32],
+    rent_payer: [u8; 32],
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
 struct InitializeOrderArgs {
     sell_token: Pubkey,
     buy_token: Pubkey,
     sell_amount: u64,
     buy_amount: u64,
     referral_fee: u64,
-    referral_account: Pubkey,
+    referral_token_account: Pubkey,
+    order_nonce: [u8; 8],
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Pod, Zeroable)]
-#[repr(C)]
-struct Order {
-    is_initialized: u8, // bool is not Pod, use u8
-    owner: Pubkey,
-    sell_token: Pubkey,
-    buy_token: Pubkey,
-    // There will be padding here due to alignment if next field is u64
-    // 1 + 32 + 32 + 32 = 97.
-    // u64 align is 8.
-    // 97 -> 104 (7 bytes padding)
-    // bytemuck derives should handle this?
-    // Wait, bytemuck::Pod requires explicit padding or "no padding bytes".
-    // "Pod" trait cannot be derived for structs with padding unless Zeroable is also derived and the padding is guaranteed zero?
-    // Actually, bytemuck 1.14 allows derive(Pod) on repr(C) structs ONLY if they have no padding?
-    // Safe bet: "The struct must not have any padding bytes." - standard rule.
-    // So I must adding padding explicitly.
-    _padding: [u8; 7],
-    sell_amount: u64,
-    buy_amount: u64,
-    referral_fee: u64,
-    referral_account: Pubkey,
-    rent_payer: Pubkey,
+impl InitializeOrderArgs {
+    fn to_bytes(&self) -> Vec<u8> {
+        let mut data = Vec::with_capacity(128);
+        data.push(0u8); // Discriminator
+        data.extend_from_slice(self.sell_token.as_ref());
+        data.extend_from_slice(self.buy_token.as_ref());
+        data.extend_from_slice(&self.sell_amount.to_le_bytes());
+        data.extend_from_slice(&self.buy_amount.to_le_bytes());
+        data.extend_from_slice(&self.referral_fee.to_le_bytes());
+        data.extend_from_slice(self.referral_token_account.as_ref());
+        data.extend_from_slice(&self.order_nonce);
+        data
+    }
 }
-
-// Address of the deployed program (matches declare_id! in lib.rs)
-// 7QP9vxNo7EEwTjrskup6n3F1dcwgUsVKgMFnJsXoyBde
-const PROGRAM_ID: Pubkey = solana_sdk::pubkey!("7QP9vxNo7EEwTjrskup6n3F1dcwgUsVKgMFnJsXoyBde");
 
 #[tokio::test]
 async fn test_initialize_order() {
-    let program_test = ProgramTest::new("sol_ver", PROGRAM_ID, None);
+    let program_test = ProgramTest::new("sol_ver", ORDER_PROGRAM_ID, None);
 
     let (mut banks_client, payer, recent_blockhash) = program_test.start().await;
 
     // Accounts
     let owner = Keypair::new();
-    let order_account = Keypair::new();
-    let sell_token = Pubkey::new_unique();
-    let buy_token = Pubkey::new_unique();
-    let referral_account = Pubkey::new_unique();
+    let sell_token_mint = Keypair::new();
+    let buy_token_mint = Keypair::new();
+    let referral_account = Keypair::new();
 
-    // Arguments
+    // Create Mints
+    let rent_mint = banks_client
+        .get_rent()
+        .await
+        .unwrap()
+        .minimum_balance(MINT_LEN as usize);
+
+    // Create Sell Mint
+    let create_sell_mint_tx = Transaction::new_signed_with_payer(
+        &[
+            system_create_account(
+                &payer.pubkey(),
+                &sell_token_mint.pubkey(),
+                rent_mint,
+                MINT_LEN,
+                &SPL_TOKEN_PROGRAM_ID,
+            ),
+            token_initialize_mint(&sell_token_mint.pubkey(), &payer.pubkey(), 6),
+        ],
+        Some(&payer.pubkey()),
+        &[&payer, &sell_token_mint],
+        recent_blockhash,
+    );
+    banks_client
+        .process_transaction(create_sell_mint_tx)
+        .await
+        .unwrap();
+
+    // Create Buy Mint
+    let create_buy_mint_tx = Transaction::new_signed_with_payer(
+        &[
+            system_create_account(
+                &payer.pubkey(),
+                &buy_token_mint.pubkey(),
+                rent_mint,
+                MINT_LEN,
+                &SPL_TOKEN_PROGRAM_ID,
+            ),
+            token_initialize_mint(&buy_token_mint.pubkey(), &payer.pubkey(), 6),
+        ],
+        Some(&payer.pubkey()),
+        &[&payer, &buy_token_mint],
+        recent_blockhash,
+    );
+    banks_client
+        .process_transaction(create_buy_mint_tx)
+        .await
+        .unwrap();
+
+    // Setup Owner's Token Account (From Account)
+    let from_token_account = Keypair::new();
+    let rent_account = banks_client
+        .get_rent()
+        .await
+        .unwrap()
+        .minimum_balance(TOKEN_ACCOUNT_LEN as usize);
+
+    let create_from_account_tx = Transaction::new_signed_with_payer(
+        &[
+            system_create_account(
+                &payer.pubkey(),
+                &from_token_account.pubkey(),
+                rent_account,
+                TOKEN_ACCOUNT_LEN,
+                &SPL_TOKEN_PROGRAM_ID,
+            ),
+            token_initialize_account(
+                &from_token_account.pubkey(),
+                &buy_token_mint.pubkey(),
+                &owner.pubkey(),
+            ),
+            token_mint_to(
+                &buy_token_mint.pubkey(),
+                &from_token_account.pubkey(),
+                &payer.pubkey(),
+                2000,
+            ),
+        ],
+        Some(&payer.pubkey()),
+        &[&payer, &from_token_account],
+        recent_blockhash,
+    );
+    banks_client
+        .process_transaction(create_from_account_tx)
+        .await
+        .unwrap();
+
+    // Calculate Order PDA
+    let order_nonce = [1u8; 8];
+    let (order_account, _bump) = Pubkey::find_program_address(
+        &[b"order", &owner.pubkey().as_ref(), &order_nonce],
+        &ORDER_PROGRAM_ID,
+    );
+
+    // Setup To Token Account (Owned by Order PDA)
+    let to_token_account = Keypair::new();
+    let create_to_account_tx = Transaction::new_signed_with_payer(
+        &[
+            system_create_account(
+                &payer.pubkey(),
+                &to_token_account.pubkey(),
+                rent_account,
+                TOKEN_ACCOUNT_LEN,
+                &SPL_TOKEN_PROGRAM_ID,
+            ),
+            token_initialize_account(
+                &to_token_account.pubkey(),
+                &buy_token_mint.pubkey(),
+                &order_account,
+            ),
+        ],
+        Some(&payer.pubkey()),
+        &[&payer, &to_token_account],
+        recent_blockhash,
+    );
+    banks_client
+        .process_transaction(create_to_account_tx)
+        .await
+        .unwrap();
+
+    // Args
     let args = InitializeOrderArgs {
-        sell_token,
-        buy_token,
+        sell_token: sell_token_mint.pubkey(),
+        buy_token: buy_token_mint.pubkey(),
         sell_amount: 1000,
         buy_amount: 2000,
         referral_fee: 50,
-        referral_account,
+        referral_token_account: referral_account.pubkey(),
+        order_nonce,
     };
 
-    // Serialize args manually to match C representation
-    let mut data = Vec::with_capacity(1 + std::mem::size_of::<InitializeOrderArgs>());
-    data.push(0u8); // Discriminator for InitializeOrder
-    data.extend_from_slice(args.sell_token.as_ref());
-    data.extend_from_slice(args.buy_token.as_ref());
-    data.extend_from_slice(&args.sell_amount.to_le_bytes());
-    data.extend_from_slice(&args.buy_amount.to_le_bytes());
-    data.extend_from_slice(&args.referral_fee.to_le_bytes());
-    data.extend_from_slice(args.referral_account.as_ref());
-
-    // Transaction to create and initialize order
-    // Note: The instruction implementation calls CreateAccount.
-    // The order_account must be a signer because it is being created.
+    // Instruction
     let accounts = vec![
         AccountMeta::new(payer.pubkey(), true),
         AccountMeta::new(owner.pubkey(), true),
-        AccountMeta::new(order_account.pubkey(), true),
-        AccountMeta::new_readonly(solana_sdk::sysvar::rent::id(), false),
-        AccountMeta::new_readonly(Pubkey::default(), false), // System Program ID
+        AccountMeta::new(order_account, false),
+        AccountMeta::new(from_token_account.pubkey(), false),
+        AccountMeta::new(to_token_account.pubkey(), false),
+        AccountMeta::new_readonly(solana_program::sysvar::rent::id(), false),
+        AccountMeta::new_readonly(SPL_TOKEN_PROGRAM_ID, false),
+        AccountMeta::new_readonly(SYSTEM_PROGRAM_ID, false),
     ];
 
     let instruction = Instruction {
-        program_id: PROGRAM_ID,
+        program_id: ORDER_PROGRAM_ID,
         accounts,
-        data,
+        data: args.to_bytes(),
     };
 
     let mut transaction = Transaction::new_with_payer(&[instruction], Some(&payer.pubkey()));
-
-    transaction.sign(&[&payer, &owner, &order_account], recent_blockhash);
+    transaction.sign(&[&payer, &owner], recent_blockhash);
 
     banks_client.process_transaction(transaction).await.unwrap();
 
-    // Verify account data
+    // Verify Order Account
     let account = banks_client
-        .get_account(order_account.pubkey())
+        .get_account(order_account)
         .await
         .unwrap()
-        .expect("Account not found");
+        .expect("Order account not found");
+    let order_layout: &OrderLayout = bytemuck::from_bytes(&account.data);
 
-    // Check data length
-    assert_eq!(account.data.len(), 192);
+    assert_eq!(order_layout.is_initialized, 1);
+    assert_eq!(Pubkey::new_from_array(order_layout.owner), owner.pubkey());
+    assert_eq!(
+        Pubkey::new_from_array(order_layout.sell_token),
+        sell_token_mint.pubkey()
+    );
+    assert_eq!(
+        Pubkey::new_from_array(order_layout.buy_token),
+        buy_token_mint.pubkey()
+    );
+    assert_eq!(order_layout.sell_amount, 1000);
+    assert_eq!(order_layout.buy_amount, 2000);
+    assert_eq!(order_layout.referral_fee, 50);
+    assert_eq!(
+        Pubkey::new_from_array(order_layout.referral_token_account),
+        referral_account.pubkey()
+    );
+    assert_eq!(
+        Pubkey::new_from_array(order_layout.rent_payer),
+        payer.pubkey()
+    );
 
-    // Use bytemuck to read data
-    // Note: account.data might contain garbage in padding bytes if not initialized?
-    // But `CreateAccount` zeroes memory.
-    // And `Order::init` sets fields.
-    // `Order::init` does NOT set padding bytes explicitly?
-    // If it uses assignment `self.field = val`, padding is preserved (if existing) or undefined?
-    // Actually, `Order::load_mut` gets mutable reference to zeroed account data.
-    // Rust assignment to fields leaves padding bytes untouched (so they remain 0).
-    // So explicit padding of 0 should match.
+    // Verify Token Balances
+    // Check To Token Account Amount (Offset 64, u64)
+    let to_token_account_data = banks_client
+        .get_account(to_token_account.pubkey())
+        .await
+        .unwrap()
+        .unwrap();
+    let to_amount_bytes: [u8; 8] = to_token_account_data.data[64..72].try_into().unwrap();
+    let to_amount = u64::from_le_bytes(to_amount_bytes);
+    assert_eq!(to_amount, 2000);
 
-    let order_on_chain: &Order = bytemuck::from_bytes(&account.data);
-
-    assert_eq!(order_on_chain.is_initialized, 1);
-    assert_eq!(order_on_chain.owner, owner.pubkey());
-    assert_eq!(order_on_chain.sell_token, sell_token);
-    assert_eq!(order_on_chain.buy_token, buy_token);
-    assert_eq!(order_on_chain.sell_amount, args.sell_amount);
-    assert_eq!(order_on_chain.buy_amount, args.buy_amount);
-    assert_eq!(order_on_chain.referral_fee, args.referral_fee);
-    assert_eq!(order_on_chain.referral_account, referral_account);
-    assert_eq!(order_on_chain.rent_payer, payer.pubkey());
+    // Check From Token Account Amount
+    let from_token_account_data = banks_client
+        .get_account(from_token_account.pubkey())
+        .await
+        .unwrap()
+        .unwrap();
+    let from_amount_bytes: [u8; 8] = from_token_account_data.data[64..72].try_into().unwrap();
+    let from_amount = u64::from_le_bytes(from_amount_bytes);
+    assert_eq!(from_amount, 0);
 }

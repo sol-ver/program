@@ -28,6 +28,7 @@ pub struct InitializeOrderContext<'a> {
     pub from_token_account: &'a AccountInfo,
     pub to_token_account: &'a AccountInfo,
     pub sysvar_rent_acc: &'a AccountInfo,
+    pub _token_program: &'a AccountInfo,
     pub _system_program: &'a AccountInfo,
 }
 
@@ -35,7 +36,7 @@ impl<'a> TryFrom<&'a [AccountInfo]> for InitializeOrderContext<'a> {
     type Error = ProgramError;
 
     fn try_from(accounts: &'a [AccountInfo]) -> Result<Self, Self::Error> {
-        let [payer, owner, order_account, from_token_account, to_token_account, sysvar_rent_acc, system_program] =
+        let [payer, owner, order_account, from_token_account, to_token_account, sysvar_rent_acc, token_program, system_program] =
             accounts
         else {
             return Err(ProgramError::NotEnoughAccountKeys);
@@ -67,6 +68,7 @@ impl<'a> TryFrom<&'a [AccountInfo]> for InitializeOrderContext<'a> {
             from_token_account,
             to_token_account,
             sysvar_rent_acc,
+            _token_program: token_program,
             _system_program: system_program,
         })
     }
@@ -78,7 +80,7 @@ pub fn process_initialize_order(accounts: &[AccountInfo], args: &[u8]) -> Progra
 
     let rent = Rent::from_account_info(context.sysvar_rent_acc)?;
 
-    let (order_drive_address, bump) = find_order_address(&args.order_nonce);
+    let (order_drive_address, bump) = find_order_address(context.owner.key(), &args.order_nonce);
 
     // make sure that order account is created by this program
     if order_drive_address != *context.order_account.key() {
@@ -87,6 +89,7 @@ pub fn process_initialize_order(accounts: &[AccountInfo], args: &[u8]) -> Progra
 
     let signer_seeds = [
         Seed::from(b"order".as_slice()),
+        Seed::from(context.owner.key().as_ref()),
         Seed::from(args.order_nonce.as_ref()),
         Seed::from(core::slice::from_ref(&bump)),
     ];
@@ -103,13 +106,17 @@ pub fn process_initialize_order(accounts: &[AccountInfo], args: &[u8]) -> Progra
     }
     .invoke_signed(&[signer])?;
 
-    let to_token_account = TokenAccount::from_account_info(context.to_token_account).unwrap();
-    if to_token_account.owner() != context.order_account.key() {
-        return Err(SolverError::InvalidTokenAccountOwner.into());
-    }
+    {
+        let to_token_account = TokenAccount::from_account_info(context.to_token_account).unwrap();
+        // validate to token account owner
+        if to_token_account.owner() != context.order_account.key() {
+            return Err(SolverError::InvalidTokenAccountOwner.into());
+        }
 
-    if *to_token_account.mint() != args.buy_token {
-        return Err(SolverError::InvalidTokenAccountMint.into());
+        // validate to token account mint
+        if *to_token_account.mint() != args.buy_token {
+            return Err(SolverError::InvalidTokenAccountMint.into());
+        }
     }
 
     // Transfer buy token to order account
