@@ -7,6 +7,9 @@ pub enum SolverError {
     InvalidInstruction,
     InvalidInstructionData,
     OrderAccountMustBeMut,
+    InvalidOrderAccount,
+    InvalidTokenAccountOwner,
+    InvalidTokenAccountMint,
 }
 
 impl From<SolverError> for ProgramError {
@@ -24,6 +27,9 @@ impl ToStr for SolverError {
             SolverError::InvalidInstruction => "Invalid instruction",
             SolverError::InvalidInstructionData => "Invalid instruction data",
             SolverError::OrderAccountMustBeMut => "Order account must be mutable",
+            SolverError::InvalidOrderAccount => "Invalid order account",
+            SolverError::InvalidTokenAccountOwner => "Invalid token account owner",
+            SolverError::InvalidTokenAccountMint => "Invalid token account mint",
         }
     }
 }
@@ -39,6 +45,15 @@ impl TryFrom<u32> for SolverError {
             }
             x if x == SolverError::OrderAccountMustBeMut as u32 => {
                 Ok(SolverError::OrderAccountMustBeMut)
+            }
+            x if x == SolverError::InvalidOrderAccount as u32 => {
+                Ok(SolverError::InvalidOrderAccount)
+            }
+            x if x == SolverError::InvalidTokenAccountOwner as u32 => {
+                Ok(SolverError::InvalidTokenAccountOwner)
+            }
+            x if x == SolverError::InvalidTokenAccountMint as u32 => {
+                Ok(SolverError::InvalidTokenAccountMint)
             }
             _ => Err(ProgramError::Custom(value)),
         }

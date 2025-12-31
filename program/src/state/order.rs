@@ -13,7 +13,7 @@ pub struct Order {
     pub sell_amount: u64,
     pub buy_amount: u64,
     pub referral_fee: u64,
-    pub referral_account: Pubkey,
+    pub referral_token_account: Pubkey,
     pub rent_payer: Pubkey,
 }
 
@@ -38,7 +38,7 @@ impl Order {
         sell_amount: u64,
         buy_amount: u64,
         referral_fee: u64,
-        referral_account: Pubkey,
+        referral_token_account: Pubkey,
         rent_payer: Pubkey,
     ) -> Result<(), ProgramError> {
         self.is_initialized = true;
@@ -48,7 +48,7 @@ impl Order {
         self.sell_amount = sell_amount;
         self.buy_amount = buy_amount;
         self.referral_fee = referral_fee;
-        self.referral_account = referral_account;
+        self.referral_token_account = referral_token_account;
         self.rent_payer = rent_payer;
         Ok(())
     }

@@ -1,6 +1,10 @@
 use crate::error::SolverError;
 use bytemuck::{try_from_bytes, Pod};
-use pinocchio::{account_info::AccountInfo, program_error::ProgramError};
+use pinocchio::{
+    account_info::AccountInfo,
+    program_error::ProgramError,
+    pubkey::{find_program_address, Pubkey},
+};
 
 pub trait DataLen {
     const LEN: usize;
@@ -107,4 +111,9 @@ pub unsafe fn try_from_account_info_mut<T: DataLen>(
     }
 
     Ok(&mut *(bytes.as_mut_ptr() as *mut T))
+}
+
+#[inline(always)]
+pub fn find_order_address(order_nonce: &[u8; 8]) -> (Pubkey, u8) {
+    find_program_address(&[b"order", order_nonce.as_ref()], &crate::ID)
 }
