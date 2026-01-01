@@ -10,6 +10,7 @@ pub enum SolverError {
     InvalidOrderAccount,
     InvalidTokenAccountOwner,
     InvalidTokenAccountMint,
+    InvalidOrderAccountOwner,
 }
 
 impl From<SolverError> for ProgramError {
@@ -30,6 +31,7 @@ impl ToStr for SolverError {
             SolverError::InvalidOrderAccount => "Invalid order account",
             SolverError::InvalidTokenAccountOwner => "Invalid token account owner",
             SolverError::InvalidTokenAccountMint => "Invalid token account mint",
+            SolverError::InvalidOrderAccountOwner => "Invalid order account owner",
         }
     }
 }
@@ -54,6 +56,9 @@ impl TryFrom<u32> for SolverError {
             }
             x if x == SolverError::InvalidTokenAccountMint as u32 => {
                 Ok(SolverError::InvalidTokenAccountMint)
+            }
+            x if x == SolverError::InvalidOrderAccountOwner as u32 => {
+                Ok(SolverError::InvalidOrderAccountOwner)
             }
             _ => Err(ProgramError::Custom(value)),
         }

@@ -1,5 +1,6 @@
 use pinocchio::program_error::ProgramError;
 
+pub mod cancel_order;
 pub mod initialize_order;
 
 #[repr(u8)]
