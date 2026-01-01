@@ -60,7 +60,7 @@ pub fn process_cancel_order(accounts: &[AccountInfo], args: &[u8]) -> Result<(),
     let context = CancelOrderContext::try_from(accounts)?;
 
     let order = Order::load(context.order_account)?;
-    if order.owner() != context.owner.key() {
+    if order.owner != *context.owner.key() {
         return Err(SolverError::InvalidOrderAccountOwner.into());
     }
 
