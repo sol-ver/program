@@ -10,6 +10,7 @@ pub struct Order {
     pub owner: Pubkey,
     pub sell_token: Pubkey,
     pub buy_token: Pubkey,
+    pub receiver_token_account: Pubkey,
     pub sell_amount: u64,
     pub buy_amount: u64,
     pub referral_fee: u64,
@@ -37,6 +38,7 @@ impl Order {
         buy_token: Pubkey,
         sell_amount: u64,
         buy_amount: u64,
+        receiver_token_account: Pubkey,
         referral_fee: u64,
         referral_token_account: Pubkey,
         rent_payer: Pubkey,
@@ -46,6 +48,7 @@ impl Order {
         self.sell_token = sell_token;
         self.buy_token = buy_token;
         self.sell_amount = sell_amount;
+        self.receiver_token_account = receiver_token_account;
         self.buy_amount = buy_amount;
         self.referral_fee = referral_fee;
         self.referral_token_account = referral_token_account;
