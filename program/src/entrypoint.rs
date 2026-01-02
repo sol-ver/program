@@ -1,6 +1,8 @@
 use crate::{
     error::SolverError,
-    instruction::{initialize_order::process_initialize_order, Instruction},
+    instruction::{
+        cancel_order::process_cancel_order, initialize_order::process_initialize_order, Instruction,
+    },
 };
 use pinocchio::{account_info::AccountInfo, entrypoint, msg, pubkey::Pubkey, ProgramResult};
 
@@ -20,6 +22,7 @@ pub fn process_instruction(
     let instruction = Instruction::try_from(*descriminator)?;
     match instruction {
         Instruction::InitializeOrder => process_initialize_order(accounts, instruction_data),
+        Instruction::CancelOrder => process_cancel_order(accounts, instruction_data),
         _ => Err(SolverError::InvalidInstruction.into()),
     }
 }

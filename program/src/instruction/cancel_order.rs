@@ -1,6 +1,15 @@
-use pinocchio::{account_info::AccountInfo, program_error::ProgramError};
+use pinocchio::{
+    account_info::AccountInfo,
+    instruction::{Seed, Signer},
+    program_error::ProgramError,
+};
+use pinocchio_token::instructions::{CloseAccount, Transfer};
 
-use crate::{error::SolverError, state::order::Order, utils::Unpackable};
+use crate::{
+    error::SolverError,
+    state::order::Order,
+    utils::{find_order_address, Unpackable},
+};
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq, shank::ShankType, bytemuck::Pod, bytemuck::Zeroable)]
@@ -60,8 +69,48 @@ pub fn process_cancel_order(accounts: &[AccountInfo], args: &[u8]) -> Result<(),
     let context = CancelOrderContext::try_from(accounts)?;
 
     let order = Order::load(context.order_account)?;
+    // validate owner
     if order.owner != *context.owner.key() {
         return Err(SolverError::InvalidOrderAccountOwner.into());
+    }
+
+    // validate rent payer
+    if order.rent_payer != *context.rent_payer.key() {
+        return Err(SolverError::InvalidRentPayer.into());
+    }
+
+    let (_, bump) = find_order_address(context.owner.key(), &args.order_nonce);
+
+    let signer_seeds = [
+        Seed::from(b"order".as_slice()),
+        Seed::from(context.owner.key().as_ref()),
+        Seed::from(args.order_nonce.as_ref()),
+        Seed::from(core::slice::from_ref(&bump)),
+    ];
+
+    let signer = Signer::from(&signer_seeds);
+
+    // Transfer all token to rent payer
+    Transfer {
+        from: context.from_token_account,
+        to: context.to_token_account,
+        authority: context.order_account,
+        amount: order.sell_amount,
+    }
+    .invoke_signed(&[signer.clone()])?;
+
+    // Close from token account
+    CloseAccount {
+        account: context.from_token_account,
+        destination: context.rent_payer,
+        authority: context.order_account,
+    }
+    .invoke_signed(&[signer])?;
+
+    // SAFETY close order account
+    unsafe {
+        *context.rent_payer.borrow_mut_lamports_unchecked() += context.order_account.lamports();
+        context.order_account.close_unchecked();
     }
 
     Ok(())
