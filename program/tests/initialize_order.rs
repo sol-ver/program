@@ -298,7 +298,6 @@ async fn test_initialize_order() {
         AccountMeta::new(owner.pubkey(), true),
         AccountMeta::new(order_account, false),
         AccountMeta::new(from_token_account.pubkey(), false),
-        AccountMeta::new(to_token_account.pubkey(), false),
         AccountMeta::new_readonly(solana_program::sysvar::rent::id(), false),
         AccountMeta::new_readonly(SPL_TOKEN_PROGRAM_ID, false),
         AccountMeta::new_readonly(SYSTEM_PROGRAM_ID, false),

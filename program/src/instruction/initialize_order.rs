@@ -7,7 +7,6 @@ use pinocchio::{
 };
 use pinocchio_system::instructions::CreateAccount;
 use pinocchio_token::instructions::Approve;
-use pinocchio_token::state::TokenAccount;
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq, shank::ShankType, bytemuck::Pod, bytemuck::Zeroable)]
@@ -21,7 +20,7 @@ pub struct InitializeOrderArgs {
     pub referral_token_account: Pubkey,
     pub order_nonce: u64,
     pub order_bump: u8,
-    pub _padding: [u8; 7],
+    _padding: [u8; 7]
 }
 
 pub struct InitializeOrderContext<'a> {
@@ -29,7 +28,6 @@ pub struct InitializeOrderContext<'a> {
     pub owner: &'a AccountInfo,
     pub order_account: &'a AccountInfo,
     pub from_token_account: &'a AccountInfo,
-    pub to_token_account: &'a AccountInfo,
     pub sysvar_rent_acc: &'a AccountInfo,
     pub _token_program: &'a AccountInfo,
     pub _system_program: &'a AccountInfo,
@@ -39,7 +37,7 @@ impl<'a> TryFrom<&'a [AccountInfo]> for InitializeOrderContext<'a> {
     type Error = ProgramError;
 
     fn try_from(accounts: &'a [AccountInfo]) -> Result<Self, Self::Error> {
-        let [payer, owner, order_account, from_token_account, to_token_account, sysvar_rent_acc, token_program, system_program] =
+        let [payer, owner, order_account, from_token_account, sysvar_rent_acc, token_program, system_program] =
             accounts
         else {
             return Err(ProgramError::NotEnoughAccountKeys);
@@ -69,7 +67,6 @@ impl<'a> TryFrom<&'a [AccountInfo]> for InitializeOrderContext<'a> {
             owner,
             order_account,
             from_token_account,
-            to_token_account,
             sysvar_rent_acc,
             _token_program: token_program,
             _system_program: system_program,
@@ -102,19 +99,6 @@ pub fn process_initialize_order(accounts: &[AccountInfo], args: &[u8]) -> Progra
         to: context.order_account,
     }
     .invoke_signed(&[signer])?;
-
-    {
-        let to_token_account = TokenAccount::from_account_info(context.to_token_account).unwrap();
-        // validate to token account owner
-        if to_token_account.owner() != context.order_account.key() {
-            return Err(SolverError::InvalidTokenAccountOwner.into());
-        }
-
-        // validate to token account mint
-        if *to_token_account.mint() != args.buy_token {
-            return Err(SolverError::InvalidTokenAccountMint.into());
-        }
-    }
 
     // Transfer buy token to order account
     Approve {
