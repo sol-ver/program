@@ -119,7 +119,9 @@ struct InitializeOrderArgs {
     receiver_token_account: Pubkey,
     referral_fee: u64,
     referral_token_account: Pubkey,
-    order_nonce: [u8; 8],
+    order_nonce: u64,
+    order_bump: u8,
+    _padding: [u8; 7],
 }
 
 impl InitializeOrderArgs {
@@ -133,7 +135,9 @@ impl InitializeOrderArgs {
         data.extend_from_slice(self.receiver_token_account.as_ref());
         data.extend_from_slice(&self.referral_fee.to_le_bytes());
         data.extend_from_slice(self.referral_token_account.as_ref());
-        data.extend_from_slice(&self.order_nonce);
+        data.extend_from_slice(&self.order_nonce.to_le_bytes());
+        data.push(self.order_bump);
+        data.extend_from_slice(&self._padding);
         data
     }
 }
@@ -238,9 +242,13 @@ async fn test_initialize_order() {
         .unwrap();
 
     // Calculate Order PDA
-    let order_nonce = [1u8; 8];
-    let (order_account, _bump) = Pubkey::find_program_address(
-        &[b"order", &owner.pubkey().as_ref(), &order_nonce],
+    let order_nonce: u64 = 1;
+    let (order_account, bump) = Pubkey::find_program_address(
+        &[
+            b"order",
+            &owner.pubkey().as_ref(),
+            &order_nonce.to_be_bytes(),
+        ],
         &ORDER_PROGRAM_ID,
     );
 
@@ -280,6 +288,8 @@ async fn test_initialize_order() {
         referral_fee: 50,
         referral_token_account: referral_account.pubkey(),
         order_nonce,
+        order_bump: bump,
+        _padding: [0; 7],
     };
 
     // Instruction
@@ -311,7 +321,7 @@ async fn test_initialize_order() {
         .await
         .unwrap()
         .expect("Order account not found");
-    let order_layout: &OrderLayout = unsafe { &*(account.data.as_ptr() as *const &OrderLayout) };
+    let order_layout: &OrderLayout = unsafe { &*(account.data.as_ptr() as *const OrderLayout) };
 
     assert_eq!(order_layout.is_initialized, 1);
     assert_eq!(Pubkey::new_from_array(order_layout.owner), owner.pubkey());
@@ -335,7 +345,27 @@ async fn test_initialize_order() {
         payer.pubkey()
     );
 
-    // TODO: Verify approval
-    todo!("Verify approval logic")
-}
+    // Verify approval
+    let account = banks_client
+        .get_account(from_token_account.pubkey())
+        .await
+        .unwrap()
+        .expect("From token account not found");
+    // let account_data = spl_token::state::Account::unpack(&account.data).unwrap();
+    // assert_eq!(account_data.delegate, Some(order_account));
+    // assert_eq!(account_data.delegated_amount, 2000);
+    let data = account.data;
+    // Delegate is at offset 72
+    // COption<Pubkey>: u32 tag (4 bytes) + [u8; 32] body
+    let delegate_tag = u32::from_le_bytes(data[72..76].try_into().unwrap());
+    assert_eq!(delegate_tag, 1, "Delegate tag should be 1 (Some)");
+    let delegate_pubkey = Pubkey::new_from_array(data[76..108].try_into().unwrap());
+    assert_eq!(
+        delegate_pubkey, order_account,
+        "Delegate should be order account"
+    );
 
+    // Delegated amount is at offset 121
+    let delegated_amount = u64::from_le_bytes(data[121..129].try_into().unwrap());
+    assert_eq!(delegated_amount, 2000, "Delegated amount should be 2000");
+}

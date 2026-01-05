@@ -1,4 +1,4 @@
-use crate::utils::{find_order_address, DataLen, Unpackable};
+use crate::utils::{DataLen, Unpackable};
 use crate::{error::SolverError, state::order::Order};
 use pinocchio::instruction::{Seed, Signer};
 use pinocchio::{
@@ -19,7 +19,9 @@ pub struct InitializeOrderArgs {
     pub receiver_token_account: Pubkey,
     pub referral_fee: u64,
     pub referral_token_account: Pubkey,
-    pub order_nonce: [u8; 8],
+    pub order_nonce: u64,
+    pub order_bump: u8,
+    pub _padding: [u8; 7],
 }
 
 pub struct InitializeOrderContext<'a> {
@@ -80,19 +82,13 @@ pub fn process_initialize_order(accounts: &[AccountInfo], args: &[u8]) -> Progra
     let context = InitializeOrderContext::try_from(accounts)?;
 
     let rent = Rent::from_account_info(context.sysvar_rent_acc)?;
-
-    let (order_drive_address, bump) = find_order_address(context.owner.key(), &args.order_nonce);
-
-    // make sure that order account is created by this program
-    if order_drive_address != *context.order_account.key() {
-        return Err(SolverError::InvalidOrderAccount.into());
-    }
+    let nonce = args.order_nonce.to_be_bytes();
 
     let signer_seeds = [
         Seed::from(b"order".as_slice()),
         Seed::from(context.owner.key().as_ref()),
-        Seed::from(args.order_nonce.as_ref()),
-        Seed::from(core::slice::from_ref(&bump)),
+        Seed::from(nonce.as_ref()),
+        Seed::from(core::slice::from_ref(&args.order_bump)),
     ];
 
     let signer = Signer::from(&signer_seeds);

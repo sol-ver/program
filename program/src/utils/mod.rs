@@ -114,9 +114,9 @@ pub unsafe fn try_from_account_info_mut<T: DataLen>(
 }
 
 #[inline(always)]
-pub fn find_order_address(owner: &Pubkey, order_nonce: &[u8; 8]) -> (Pubkey, u8) {
+pub fn find_order_address(owner: &Pubkey, order_nonce: &u64) -> (Pubkey, u8) {
     find_program_address(
-        &[b"order", owner.as_ref(), order_nonce.as_ref()],
+        &[b"order", owner.as_ref(), order_nonce.to_be_bytes().as_ref()],
         &crate::ID,
     )
 }
