@@ -21,8 +21,8 @@ pub fn process_instruction(
 
     let instruction = Instruction::try_from(*descriminator)?;
     match instruction {
-        Instruction::InitializeOrder => process_initialize_order(accounts, instruction_data),
-        Instruction::CancelOrder => process_cancel_order(accounts, instruction_data),
+        Instruction::Initialize => process_initialize_order(accounts, instruction_data),
+        Instruction::Cancel => process_cancel_order(accounts, instruction_data),
         _ => Err(SolverError::InvalidInstruction.into()),
     }
 }

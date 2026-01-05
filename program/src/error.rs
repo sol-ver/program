@@ -1,6 +1,6 @@
 use pinocchio::program_error::{ProgramError, ToStr};
 
-/// Errors that may be returned by the Token program.
+/// Errors that may be returned by the Solver Program
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum SolverError {
     /// Invalid Instruction

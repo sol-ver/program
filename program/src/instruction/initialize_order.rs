@@ -6,7 +6,7 @@ use pinocchio::{
     ProgramResult,
 };
 use pinocchio_system::instructions::CreateAccount;
-use pinocchio_token::instructions::Transfer;
+use pinocchio_token::instructions::Approve;
 use pinocchio_token::state::TokenAccount;
 
 #[repr(C)]
@@ -58,7 +58,7 @@ impl<'a> TryFrom<&'a [AccountInfo]> for InitializeOrderContext<'a> {
             return Err(SolverError::OrderAccountMustBeMut.into());
         }
 
-        if !(system_program.key() == &pinocchio_system::ID) {
+        if system_program.key() != &pinocchio_system::ID {
             return Err(ProgramError::IncorrectProgramId);
         }
 
@@ -121,9 +121,9 @@ pub fn process_initialize_order(accounts: &[AccountInfo], args: &[u8]) -> Progra
     }
 
     // Transfer buy token to order account
-    Transfer {
-        from: context.from_token_account,
-        to: context.to_token_account,
+    Approve {
+        source: context.from_token_account,
+        delegate: context.order_account,
         authority: context.owner,
         amount: args.buy_amount,
     }

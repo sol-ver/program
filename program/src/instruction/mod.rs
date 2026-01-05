@@ -5,9 +5,9 @@ pub mod initialize_order;
 
 #[repr(u8)]
 pub enum Instruction {
-    InitializeOrder,
-    CancelOrder,
-    ExecuteOrder,
+    Initialize,
+    Cancel,
+    Execute,
 }
 
 impl TryFrom<u8> for Instruction {
@@ -15,9 +15,9 @@ impl TryFrom<u8> for Instruction {
 
     fn try_from(value: u8) -> Result<Self, Self::Error> {
         match value {
-            0 => Ok(Instruction::InitializeOrder),
-            1 => Ok(Instruction::CancelOrder),
-            2 => Ok(Instruction::ExecuteOrder),
+            0 => Ok(Instruction::Initialize),
+            1 => Ok(Instruction::Cancel),
+            2 => Ok(Instruction::Execute),
             _ => Err(ProgramError::InvalidInstructionData),
         }
     }

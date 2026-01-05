@@ -96,13 +96,13 @@ fn token_mint_to(mint: &Pubkey, dest: &Pubkey, authority: &Pubkey, amount: u64) 
 
 // Order Layout
 #[repr(C)]
-#[derive(Clone, Copy, Debug, Pod, Zeroable)]
+#[derive(Clone, Copy, Debug)]
 struct OrderLayout {
     is_initialized: u8,
     owner: [u8; 32],
     sell_token: [u8; 32],
     buy_token: [u8; 32],
-    _padding: [u8; 7],
+    receiver_token_account: [u8; 32],
     sell_amount: u64,
     buy_amount: u64,
     referral_fee: u64,
@@ -116,6 +116,7 @@ struct InitializeOrderArgs {
     buy_token: Pubkey,
     sell_amount: u64,
     buy_amount: u64,
+    receiver_token_account: Pubkey,
     referral_fee: u64,
     referral_token_account: Pubkey,
     order_nonce: [u8; 8],
@@ -123,12 +124,13 @@ struct InitializeOrderArgs {
 
 impl InitializeOrderArgs {
     fn to_bytes(&self) -> Vec<u8> {
-        let mut data = Vec::with_capacity(128);
+        let mut data = Vec::with_capacity(160);
         data.push(0u8); // Discriminator
         data.extend_from_slice(self.sell_token.as_ref());
         data.extend_from_slice(self.buy_token.as_ref());
         data.extend_from_slice(&self.sell_amount.to_le_bytes());
         data.extend_from_slice(&self.buy_amount.to_le_bytes());
+        data.extend_from_slice(self.receiver_token_account.as_ref());
         data.extend_from_slice(&self.referral_fee.to_le_bytes());
         data.extend_from_slice(self.referral_token_account.as_ref());
         data.extend_from_slice(&self.order_nonce);
@@ -274,6 +276,7 @@ async fn test_initialize_order() {
         buy_token: buy_token_mint.pubkey(),
         sell_amount: 1000,
         buy_amount: 2000,
+        receiver_token_account: to_token_account.pubkey(),
         referral_fee: 50,
         referral_token_account: referral_account.pubkey(),
         order_nonce,
@@ -308,7 +311,7 @@ async fn test_initialize_order() {
         .await
         .unwrap()
         .expect("Order account not found");
-    let order_layout: &OrderLayout = bytemuck::from_bytes(&account.data);
+    let order_layout: &OrderLayout = unsafe { &*(account.data.as_ptr() as *const &OrderLayout) };
 
     assert_eq!(order_layout.is_initialized, 1);
     assert_eq!(Pubkey::new_from_array(order_layout.owner), owner.pubkey());
@@ -332,24 +335,7 @@ async fn test_initialize_order() {
         payer.pubkey()
     );
 
-    // Verify Token Balances
-    // Check To Token Account Amount (Offset 64, u64)
-    let to_token_account_data = banks_client
-        .get_account(to_token_account.pubkey())
-        .await
-        .unwrap()
-        .unwrap();
-    let to_amount_bytes: [u8; 8] = to_token_account_data.data[64..72].try_into().unwrap();
-    let to_amount = u64::from_le_bytes(to_amount_bytes);
-    assert_eq!(to_amount, 2000);
-
-    // Check From Token Account Amount
-    let from_token_account_data = banks_client
-        .get_account(from_token_account.pubkey())
-        .await
-        .unwrap()
-        .unwrap();
-    let from_amount_bytes: [u8; 8] = from_token_account_data.data[64..72].try_into().unwrap();
-    let from_amount = u64::from_le_bytes(from_amount_bytes);
-    assert_eq!(from_amount, 0);
+    // TODO: Verify approval
+    todo!("Verify approval logic")
 }
+
