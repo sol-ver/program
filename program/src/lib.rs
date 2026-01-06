@@ -1,7 +1,8 @@
 #![no_std]
+extern crate alloc;
 pub mod entrypoint;
 mod error;
-mod instruction;
+pub mod instruction;
 pub mod state;
 mod utils;
 

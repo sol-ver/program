@@ -20,8 +20,9 @@ async fn test_calculate_current_buy_amount() {
         referral_fee: 0,
         referral_token_account: pinocchio::pubkey::Pubkey::default(),
         minimun_buy_amount: 500, // Floor price
-        start_time: 100,         // Start Time
-        deadline: 200,           // End Time (Duration: 100)
+        _padding: [0; 6],
+        start_time: 100, // Start Time
+        deadline: 200,   // End Time (Duration: 100)
     };
     // 1. Before start time
     assert_eq!(order.calculate_current_buy_amount(50), 1000);
@@ -79,6 +80,7 @@ async fn test_initialize_order() {
         referral_fee: 1,
         referral_token_account: p_referral,
         minimun_buy_amount: 45,
+        _padding: [0; 6],
         start_time: 1_600_000_000,
         deadline: 1_700_000_000,
     };

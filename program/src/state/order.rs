@@ -1,7 +1,7 @@
+use bytemuck::{Pod, Zeroable};
 use pinocchio::pubkey::Pubkey;
-use crate::utils::DataLen;
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Pod, Zeroable)]
 #[repr(C)]
 pub struct Order {
     pub from_token_account: Pubkey,
@@ -11,12 +11,9 @@ pub struct Order {
     pub referral_fee: u64,
     pub referral_token_account: Pubkey,
     pub minimun_buy_amount: u16,
+    pub _padding: [u8; 6],
     pub start_time: u64,
     pub deadline: u64,
-}
-
-impl DataLen for Order {
-    const LEN: usize = core::mem::size_of::<Order>();
 }
 
 impl Order {
@@ -36,7 +33,9 @@ impl Order {
         let elapsed_time = current_time.saturating_sub(self.start_time);
 
         // Range of the auction price
-        let total_decay_range = self.buy_amount.saturating_sub(self.minimun_buy_amount as u64);
+        let total_decay_range = self
+            .buy_amount
+            .saturating_sub(self.minimun_buy_amount as u64);
 
         // We calculate (Range * Elapsed) / Total to maintain precision with integers
         let reduction = (total_decay_range as u128)
@@ -46,4 +45,3 @@ impl Order {
         self.buy_amount.saturating_sub(reduction)
     }
 }
-

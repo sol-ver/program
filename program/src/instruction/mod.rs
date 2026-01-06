@@ -1,8 +1,10 @@
 use pinocchio::program_error::ProgramError;
+use pinocchio::pubkey::Pubkey;
+use pinocchio::{account_info::AccountInfo, ProgramResult};
 
 pub mod cancel_order;
-pub mod initialize_order;
 pub mod execute_order;
+pub mod initialize_order;
 
 #[repr(u8)]
 pub enum Instruction {
@@ -21,5 +23,21 @@ impl TryFrom<u8> for Instruction {
             2 => Ok(Instruction::Execute),
             _ => Err(ProgramError::InvalidInstructionData),
         }
+    }
+}
+
+pub fn process_instruction(
+    _program_id: &Pubkey,
+    accounts: &[AccountInfo],
+    instruction_data: &[u8],
+) -> ProgramResult {
+    let (discriminator, args) = instruction_data
+        .split_first()
+        .ok_or(ProgramError::InvalidInstructionData)?;
+
+    match Instruction::try_from(*discriminator)? {
+        Instruction::Initialize => initialize_order::process_initialize_order(accounts, args),
+        Instruction::Cancel => cancel_order::process_cancel_order(accounts, args),
+        Instruction::Execute => execute_order::process_execute_order(accounts, args),
     }
 }

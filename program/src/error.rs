@@ -12,6 +12,7 @@ pub enum SolverError {
     InvalidTokenAccountMint,
     InvalidOrderAccountOwner,
     InvalidRentPayer,
+    SlippageExceeded,
 }
 
 impl From<SolverError> for ProgramError {
@@ -34,6 +35,7 @@ impl ToStr for SolverError {
             SolverError::InvalidTokenAccountMint => "Invalid token account mint",
             SolverError::InvalidOrderAccountOwner => "Invalid order account owner",
             SolverError::InvalidRentPayer => "Invalid rent payer",
+            SolverError::SlippageExceeded => "Slippage exceeded",
         }
     }
 }
@@ -63,6 +65,7 @@ impl TryFrom<u32> for SolverError {
                 Ok(SolverError::InvalidOrderAccountOwner)
             }
             x if x == SolverError::InvalidRentPayer as u32 => Ok(SolverError::InvalidRentPayer),
+            x if x == SolverError::SlippageExceeded as u32 => Ok(SolverError::SlippageExceeded),
             _ => Err(ProgramError::Custom(value)),
         }
     }
