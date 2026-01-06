@@ -1,132 +1,71 @@
-use crate::utils::{DataLen, Unpackable};
+use crate::utils::DataLen;
 use crate::{error::SolverError, state::order::Order};
-use pinocchio::instruction::{Seed, Signer};
-use pinocchio::log::sol_log_compute_units;
+use pinocchio::pubkey::create_program_address;
 use pinocchio::{
-    account_info::AccountInfo, program_error::ProgramError, pubkey::Pubkey, sysvars::rent::Rent,
-    ProgramResult,
+    account_info::AccountInfo, msg, program_error::ProgramError, ProgramResult,
 };
-use pinocchio_system::instructions::CreateAccount;
 use pinocchio_token::instructions::Approve;
-
-#[repr(C)]
-#[derive(Clone, Copy, Debug, PartialEq, shank::ShankType, bytemuck::Pod, bytemuck::Zeroable)]
-pub struct InitializeOrderArgs {
-    pub sell_token: Pubkey,
-    pub buy_token: Pubkey,
-    pub sell_amount: u64,
-    pub buy_amount: u64,
-    pub receiver_token_account: Pubkey,
-    pub referral_fee: u64,
-    pub referral_token_account: Pubkey,
-    pub order_nonce: u64,
-    pub order_bump: u8,
-    _padding: [u8; 7],
-}
+use light_hasher::{Hasher, Keccak};
 
 pub struct InitializeOrderContext<'a> {
-    pub payer: &'a AccountInfo,
     pub owner: &'a AccountInfo,
     pub order_account: &'a AccountInfo,
     pub from_token_account: &'a AccountInfo,
-    pub sysvar_rent_acc: &'a AccountInfo,
-    pub _token_program: &'a AccountInfo,
-    pub _system_program: &'a AccountInfo,
+    pub token_program: &'a AccountInfo,
 }
 
 impl<'a> TryFrom<&'a [AccountInfo]> for InitializeOrderContext<'a> {
     type Error = ProgramError;
 
     fn try_from(accounts: &'a [AccountInfo]) -> Result<Self, Self::Error> {
-        let [payer, owner, order_account, from_token_account, sysvar_rent_acc, token_program, system_program] =
+        let [owner, order_account, from_token_account, token_program] =
             accounts
         else {
             return Err(ProgramError::NotEnoughAccountKeys);
         };
-        if !payer.is_signer() {
-            return Err(ProgramError::MissingRequiredSignature);
-        }
 
         if !owner.is_signer() {
             return Err(ProgramError::MissingRequiredSignature);
         }
 
-        if !order_account.data_is_empty() {
-            return Err(ProgramError::AccountAlreadyInitialized);
-        }
-
-        if !order_account.is_writable() {
-            return Err(SolverError::OrderAccountMustBeMut.into());
-        }
-
-        if system_program.key() != &pinocchio_system::ID {
-            return Err(ProgramError::IncorrectProgramId);
-        }
-
         Ok(Self {
-            payer,
             owner,
             order_account,
             from_token_account,
-            sysvar_rent_acc,
-            _token_program: token_program,
-            _system_program: system_program,
+            token_program,
         })
     }
 }
 
 pub fn process_initialize_order(accounts: &[AccountInfo], args: &[u8]) -> ProgramResult {
-    sol_log_compute_units();
-    let args = InitializeOrderArgs::unpack(args)?;
     let context = InitializeOrderContext::try_from(accounts)?;
-
-    let rent = Rent::from_account_info(context.sysvar_rent_acc)?;
-    let nonce = args.order_nonce.to_be_bytes();
-
-    let signer_seeds = [
-        Seed::from(b"order".as_slice()),
-        Seed::from(context.owner.key().as_ref()),
-        Seed::from(nonce.as_ref()),
-        Seed::from(core::slice::from_ref(&args.order_bump)),
-    ];
-
-    let signer = Signer::from(&signer_seeds);
-
-    sol_log_compute_units();
-    // Create order account
-    CreateAccount {
-        lamports: rent.minimum_balance(Order::LEN),
-        space: Order::LEN as u64,
-        owner: &crate::ID,
-        from: context.payer,
-        to: context.order_account,
+    if args.len() != 1 + 8 + Order::LEN {
+        // 1 byte order_bump + 8 bytes order_nonce + Order data
+        return Err(SolverError::InvalidInstructionData.into());
     }
-    .invoke_signed(&[signer])?;
-    sol_log_compute_units();
+    let order_bump = &args[0];
+    let intent_body = &args[..args.len() - 1];
+    let buy_amount = u64::from_le_bytes(args[153..161].try_into().unwrap());
+    let intent_hash = Keccak::hashv(&[intent_body]).unwrap();
 
-    // Transfer buy token to order account
+    let calculated_order_pubkey = create_program_address(
+        &[b"order", context.owner.key().as_ref(), intent_hash.as_ref(), &[*order_bump]],
+        &crate::ID,
+    ).unwrap();
+
+    if &calculated_order_pubkey != context.order_account.key() {
+        return Err(SolverError::InvalidOrderAccount.into());
+    }
+
     Approve {
         source: context.from_token_account,
         delegate: context.order_account,
         authority: context.owner,
-        amount: args.buy_amount,
+        amount: buy_amount,
     }
     .invoke()?;
 
-    let order = Order::load_mut(context.order_account)?;
-
-    // Initialize order
-    order.init(
-        *context.owner.key(),
-        args.sell_token,
-        args.buy_token,
-        args.sell_amount,
-        args.buy_amount,
-        args.receiver_token_account,
-        args.referral_fee,
-        args.referral_token_account,
-        *context.payer.key(),
-    )?;
+    msg!("Order created");
 
     Ok(())
 }

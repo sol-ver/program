@@ -30,32 +30,6 @@ impl DataLen for Order {
 }
 
 impl Order {
-    #[inline(always)]
-    pub fn init(
-        &mut self,
-        owner: Pubkey,
-        sell_token: Pubkey,
-        buy_token: Pubkey,
-        sell_amount: u64,
-        buy_amount: u64,
-        receiver_token_account: Pubkey,
-        referral_fee: u64,
-        referral_token_account: Pubkey,
-        rent_payer: Pubkey,
-    ) -> Result<(), ProgramError> {
-        self.is_initialized = true;
-        self.owner = owner;
-        self.sell_token = sell_token;
-        self.buy_token = buy_token;
-        self.sell_amount = sell_amount;
-        self.receiver_token_account = receiver_token_account;
-        self.buy_amount = buy_amount;
-        self.referral_fee = referral_fee;
-        self.referral_token_account = referral_token_account;
-        self.rent_payer = rent_payer;
-        Ok(())
-    }
-
     /// Reads the data from the account.
     /// This returns a reference to the data, so it does not allocate new memory (Zero Copy).
     #[inline(always)]

@@ -1,5 +1,5 @@
 use crate::error::SolverError;
-use bytemuck::{try_from_bytes, Pod};
+use bytemuck::Pod;
 use pinocchio::{
     account_info::AccountInfo,
     program_error::ProgramError,
