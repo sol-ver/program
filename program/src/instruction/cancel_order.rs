@@ -52,22 +52,5 @@ impl<'a> TryFrom<&'a [AccountInfo]> for CancelOrderContext<'a> {
 pub fn process_cancel_order(accounts: &[AccountInfo], _: &[u8]) -> Result<(), ProgramError> {
     let context = CancelOrderContext::try_from(accounts)?;
 
-    let order = Order::load(context.order_account)?;
-    // validate owner
-    if order.owner != *context.owner.key() {
-        return Err(SolverError::InvalidOrderAccountOwner.into());
-    }
-
-    // validate rent payer
-    if order.rent_payer != *context.rent_payer.key() {
-        return Err(SolverError::InvalidRentPayer.into());
-    }
-
-    // SAFETY close order account
-    unsafe {
-        *context.rent_payer.borrow_mut_lamports_unchecked() += context.order_account.lamports();
-        context.order_account.close_unchecked();
-    }
-
     Ok(())
 }

@@ -2812,6 +2812,7 @@ checksum = "c822662e6e109bac0e132a43fd52a4ef684811245a794e048cf9cda001e934c8"
 dependencies = [
  "borsh 0.10.4",
  "num-bigint 0.4.6",
+ "sha3",
  "thiserror 2.0.17",
  "tinyvec",
 ]

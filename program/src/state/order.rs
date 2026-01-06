@@ -1,28 +1,18 @@
 use pinocchio::pubkey::Pubkey;
-use pinocchio::{account_info::AccountInfo, program_error::ProgramError};
-
-use crate::utils::{try_from_account_info, try_from_account_info_mut, DataLen, Initialized};
+use crate::utils::DataLen;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[repr(C)]
 pub struct Order {
-    pub is_initialized: bool,
-    pub owner: Pubkey,
-    pub sell_token: Pubkey,
-    pub buy_token: Pubkey,
-    pub receiver_token_account: Pubkey,
+    pub from_token_account: Pubkey,
+    pub to_token_account: Pubkey,
     pub sell_amount: u64,
     pub buy_amount: u64,
     pub referral_fee: u64,
     pub referral_token_account: Pubkey,
-    pub rent_payer: Pubkey,
-}
-
-impl Initialized for Order {
-    #[inline(always)]
-    fn is_initialized(&self) -> bool {
-        self.is_initialized
-    }
+    pub minimun_buy_amount: u16,
+    pub start_time: u64,
+    pub deadline: u64,
 }
 
 impl DataLen for Order {
@@ -30,18 +20,30 @@ impl DataLen for Order {
 }
 
 impl Order {
-    /// Reads the data from the account.
-    /// This returns a reference to the data, so it does not allocate new memory (Zero Copy).
-    #[inline(always)]
-    pub fn load(account: &AccountInfo) -> Result<&Self, ProgramError> {
-        unsafe { try_from_account_info::<Order>(account) }
-    }
+    pub fn calculate_current_buy_amount(&self, current_time: u64) -> u64 {
+        // 1. If auction hasn't started, return the full starting buy_amount
+        if current_time <= self.start_time {
+            return self.buy_amount;
+        }
 
-    /// Writes/Modifies the data in the account.
-    /// This returns a mutable reference to the data. Any changes made to the returned struct
-    /// are directly applied to the account's data buffer (Zero Copy).
-    #[inline(always)]
-    pub fn load_mut(account: &AccountInfo) -> Result<&mut Self, ProgramError> {
-        unsafe { try_from_account_info_mut::<Order>(account) }
+        // 2. If auction has ended, return the floor (minimum)
+        if current_time >= self.deadline {
+            return self.minimun_buy_amount as u64;
+        }
+
+        // 3. Calculate linear decay
+        let total_duration = self.deadline.saturating_sub(self.start_time);
+        let elapsed_time = current_time.saturating_sub(self.start_time);
+
+        // Range of the auction price
+        let total_decay_range = self.buy_amount.saturating_sub(self.minimun_buy_amount as u64);
+
+        // We calculate (Range * Elapsed) / Total to maintain precision with integers
+        let reduction = (total_decay_range as u128)
+            .saturating_mul(elapsed_time as u128)
+            .saturating_div(total_duration as u128) as u64;
+
+        self.buy_amount.saturating_sub(reduction)
     }
 }
+
