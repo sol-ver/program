@@ -2,6 +2,7 @@ use pinocchio::program_error::ProgramError;
 
 pub mod cancel_order;
 pub mod initialize_order;
+pub mod execute_order;
 
 #[repr(u8)]
 pub enum Instruction {
