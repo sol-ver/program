@@ -1,6 +1,7 @@
 use crate::utils::{DataLen, Unpackable};
 use crate::{error::SolverError, state::order::Order};
 use pinocchio::instruction::{Seed, Signer};
+use pinocchio::log::sol_log_compute_units;
 use pinocchio::{
     account_info::AccountInfo, program_error::ProgramError, pubkey::Pubkey, sysvars::rent::Rent,
     ProgramResult,
@@ -20,7 +21,7 @@ pub struct InitializeOrderArgs {
     pub referral_token_account: Pubkey,
     pub order_nonce: u64,
     pub order_bump: u8,
-    _padding: [u8; 7]
+    _padding: [u8; 7],
 }
 
 pub struct InitializeOrderContext<'a> {
@@ -75,6 +76,7 @@ impl<'a> TryFrom<&'a [AccountInfo]> for InitializeOrderContext<'a> {
 }
 
 pub fn process_initialize_order(accounts: &[AccountInfo], args: &[u8]) -> ProgramResult {
+    sol_log_compute_units();
     let args = InitializeOrderArgs::unpack(args)?;
     let context = InitializeOrderContext::try_from(accounts)?;
 
@@ -90,6 +92,7 @@ pub fn process_initialize_order(accounts: &[AccountInfo], args: &[u8]) -> Progra
 
     let signer = Signer::from(&signer_seeds);
 
+    sol_log_compute_units();
     // Create order account
     CreateAccount {
         lamports: rent.minimum_balance(Order::LEN),
@@ -99,6 +102,7 @@ pub fn process_initialize_order(accounts: &[AccountInfo], args: &[u8]) -> Progra
         to: context.order_account,
     }
     .invoke_signed(&[signer])?;
+    sol_log_compute_units();
 
     // Transfer buy token to order account
     Approve {

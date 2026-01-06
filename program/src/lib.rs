@@ -1,5 +1,4 @@
 #![no_std]
-
 mod entrypoint;
 mod error;
 mod instruction;
