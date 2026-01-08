@@ -1,11 +1,13 @@
 use crate::error::SolverError;
 use crate::state::order::Order;
-use crate::utils::{DataLen, Unpackable};
-use light_hasher::{Hasher, Keccak};
-use pinocchio::pubkey::create_program_address;
+use crate::utils::DataLen;
+use alloc::vec::Vec;
+use pinocchio::cpi::{invoke_signed, slice_invoke_signed};
+use pinocchio::instruction::{AccountMeta, Instruction, Seed, Signer};
 use pinocchio::sysvars::clock::Clock;
 use pinocchio::sysvars::Sysvar;
 use pinocchio::{account_info::AccountInfo, program_error::ProgramError, ProgramResult};
+use pinocchio_token::state::TokenAccount;
 
 pub struct ExecuteOrderContext<'a> {
     pub solver: &'a AccountInfo,
@@ -57,10 +59,13 @@ pub fn process_execute_order(accounts: &[AccountInfo], args: &[u8]) -> ProgramRe
 
     let order_bump = args[0];
     let order_data = &args[1..1 + Order::LEN];
-    // Remaining data is CPI instruction data
-    let instruction_data = &args[1 + Order::LEN..];
 
-    let order = Order::unpack(order_data)?;
+    let (order, intend_hash) = Order::validate_and_unpack(
+        order_data,
+        context.owner.key(),
+        context.order_account.key(),
+        order_bump,
+    )?;
 
     if !order.validate_order_accounts(
         context.from_token_account.key(),
@@ -69,59 +74,47 @@ pub fn process_execute_order(accounts: &[AccountInfo], args: &[u8]) -> ProgramRe
     ) {
         return Err(SolverError::InvalidOrderAccounts.into());
     }
-
-    // 2. Validate Order PDA
-    let intent_hash = Keccak::hashv(&[order_data]).unwrap();
-    // Use correct slice type for address generation
-    let intent_hash_bytes = &intent_hash as &[u8];
-
-    let calculated_order_pubkey = create_program_address(
-        &[
-            b"order",
-            context.owner.key().as_ref(),
-            intent_hash_bytes,
-            &[order_bump],
-        ],
-        &crate::ID,
-    )
-    .unwrap();
-
-    if &calculated_order_pubkey != context.order_account.key() {
-        return Err(SolverError::InvalidOrderAccount.into());
-    }
-
-    // 3. Confirm to_token_account matches order
-    if context.to_token_account.key() != &order.to_token_account {
-        return Err(SolverError::InvalidOrderAccount.into()); // Or a more specific error
-    }
-
-    // 4. Calculate expected buy amount
     let clock = Clock::get()?;
     let expected_buy_amount = order.calculate_current_buy_amount(clock.unix_timestamp as u64);
 
-    // 5. Pre-balance check
     let pre_balance = {
-        let data = context.to_token_account.try_borrow_data()?;
-        if data.len() < 72 {
-            return Err(ProgramError::InvalidAccountData);
-        }
-        let mut amount_bytes = [0u8; 8];
-        amount_bytes.copy_from_slice(&data[64..72]);
-        u64::from_le_bytes(amount_bytes)
+        let token_account = TokenAccount::from_account_info(context.to_token_account).unwrap();
+        token_account.amount()
     };
 
-    // 6. Execute CPI
-    todo!("Implement CPI to token swap program using instruction_data and remaining_accounts");
+    // Remaining data is CPI instruction data
+    let instruction_data = &args[1 + Order::LEN..];
 
-    // 7. Post-balance check
+    let instruction = Instruction {
+        program_id: context.order_program.key(),
+        accounts: &context
+            .remaining_accounts
+            .iter()
+            .map(|acc| AccountMeta {
+                pubkey: acc.key(),
+                is_signer: acc.is_signer(),
+                is_writable: acc.is_writable(),
+            })
+            .collect::<Vec<AccountMeta>>(),
+        data: instruction_data,
+    };
+
+    let seeds = [
+        Seed::from(b"order".as_slice()),
+        Seed::from(context.owner.key()),
+        Seed::from(intend_hash.as_ref()),
+        Seed::from(core::slice::from_ref(&order_bump)),
+    ];
+
+    let signer = Signer::from(&seeds);
+
+    let account_refs: Vec<&AccountInfo> = context.remaining_accounts.iter().collect();
+
+    slice_invoke_signed(&instruction, &account_refs, &[signer]).unwrap();
+
     let post_balance = {
-        let data = context.to_token_account.try_borrow_data()?;
-        if data.len() < 72 {
-            return Err(ProgramError::InvalidAccountData);
-        }
-        let mut amount_bytes = [0u8; 8];
-        amount_bytes.copy_from_slice(&data[64..72]);
-        u64::from_le_bytes(amount_bytes)
+        let token_account = TokenAccount::from_account_info(context.to_token_account).unwrap();
+        token_account.amount()
     };
 
     if post_balance < pre_balance + expected_buy_amount {
