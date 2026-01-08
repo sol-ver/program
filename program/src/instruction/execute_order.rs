@@ -82,6 +82,8 @@ pub fn process_execute_order(accounts: &[AccountInfo], args: &[u8]) -> ProgramRe
         token_account.amount()
     };
 
+    // TODO: Add fee handling
+
     // Remaining data is CPI instruction data
     let instruction_data = &args[1 + Order::LEN..];
 
