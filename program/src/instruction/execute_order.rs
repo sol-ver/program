@@ -2,7 +2,7 @@ use crate::error::SolverError;
 use crate::state::order::Order;
 use crate::utils::DataLen;
 use alloc::vec::Vec;
-use pinocchio::cpi::{invoke_signed, slice_invoke_signed};
+use pinocchio::cpi::slice_invoke_signed;
 use pinocchio::instruction::{AccountMeta, Instruction, Seed, Signer};
 use pinocchio::sysvars::clock::Clock;
 use pinocchio::sysvars::Sysvar;

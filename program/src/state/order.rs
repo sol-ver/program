@@ -1,7 +1,10 @@
 use crate::{error::SolverError, utils::Unpackable};
 use bytemuck::{Pod, Zeroable};
-use pinocchio::{program_error::ProgramError, pubkey::{Pubkey, create_program_address}};
 use light_hasher::{Hasher, Keccak};
+use pinocchio::{
+    program_error::ProgramError,
+    pubkey::{create_program_address, Pubkey},
+};
 
 #[derive(Clone, Copy, Debug, PartialEq, Pod, Zeroable)]
 #[repr(C)]

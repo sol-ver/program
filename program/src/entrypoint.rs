@@ -1,7 +1,8 @@
 use crate::{
     error::SolverError,
     instruction::{
-        Instruction, execute_order::process_execute_order, initialize_order::process_initialize_order
+        execute_order::process_execute_order, initialize_order::process_initialize_order,
+        Instruction,
     },
 };
 use pinocchio::{account_info::AccountInfo, entrypoint, msg, pubkey::Pubkey, ProgramResult};
