@@ -13,6 +13,7 @@ pub struct ExecuteOrderContext<'a> {
     pub owner: &'a AccountInfo,
     pub from_token_account: &'a AccountInfo,
     pub to_token_account: &'a AccountInfo,
+    pub referral_token_account: &'a AccountInfo,
     pub order_program: &'a AccountInfo,
     pub token_program: &'a AccountInfo,
     pub remaining_accounts: &'a [AccountInfo],
@@ -22,7 +23,7 @@ impl<'a> TryFrom<&'a [AccountInfo]> for ExecuteOrderContext<'a> {
     type Error = ProgramError;
 
     fn try_from(accounts: &'a [AccountInfo]) -> Result<Self, Self::Error> {
-        let [solver, order_account, owner, from_token_account, to_token_account, order_program, token_program, remaining_accounts @ ..] =
+        let [solver, order_account, owner, from_token_account, to_token_account, referral_token_account, order_program, token_program, remaining_accounts @ ..] =
             accounts
         else {
             return Err(ProgramError::NotEnoughAccountKeys);
@@ -38,6 +39,7 @@ impl<'a> TryFrom<&'a [AccountInfo]> for ExecuteOrderContext<'a> {
             owner,
             from_token_account,
             to_token_account,
+            referral_token_account,
             order_program,
             token_program,
             remaining_accounts,
@@ -59,6 +61,14 @@ pub fn process_execute_order(accounts: &[AccountInfo], args: &[u8]) -> ProgramRe
     let instruction_data = &args[1 + Order::LEN..];
 
     let order = Order::unpack(order_data)?;
+
+    if !order.validate_order_accounts(
+        context.from_token_account.key(),
+        context.to_token_account.key(),
+        context.referral_token_account.key(),
+    ) {
+        return Err(SolverError::InvalidOrderAccounts.into());
+    }
 
     // 2. Validate Order PDA
     let intent_hash = Keccak::hashv(&[order_data]).unwrap();

@@ -10,8 +10,8 @@ pub struct Order {
     pub buy_amount: u64,
     pub referral_fee: u64,
     pub referral_token_account: Pubkey,
-    pub minimun_buy_amount: u16,
-    pub _padding: [u8; 6],
+    pub minimun_buy_amount: u64,
+    pub amount_decrease_per_second: u64,
     pub start_time: u64,
     pub deadline: u64,
 }
@@ -25,7 +25,7 @@ impl Order {
 
         // 2. If auction has ended, return the floor (minimum)
         if current_time >= self.deadline {
-            return self.minimun_buy_amount as u64;
+            return self.minimun_buy_amount;
         }
 
         // 3. Calculate linear decay
@@ -35,7 +35,7 @@ impl Order {
         // Range of the auction price
         let total_decay_range = self
             .buy_amount
-            .saturating_sub(self.minimun_buy_amount as u64);
+            .saturating_sub(self.minimun_buy_amount);
 
         // We calculate (Range * Elapsed) / Total to maintain precision with integers
         let reduction = (total_decay_range as u128)
@@ -43,5 +43,23 @@ impl Order {
             .saturating_div(total_duration as u128) as u64;
 
         self.buy_amount.saturating_sub(reduction)
+    }
+
+    pub fn validate_order_accounts(
+        &self,
+        from_token_account: &Pubkey,
+        to_token_account: &Pubkey,
+        referral_token_account: &Pubkey,
+    ) -> bool {
+        if from_token_account != &self.from_token_account {
+            return false;
+        }
+        if to_token_account != &self.to_token_account {
+            return false;
+        }
+        if self.referral_fee > 0 && referral_token_account != &self.referral_token_account {
+            return false;
+        }
+        true
     }
 }
